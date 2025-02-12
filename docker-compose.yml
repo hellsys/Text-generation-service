@@ -1,0 +1,32 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN}
+        MODEL_PROVIDER: ${MODEL_PROVIDER}
+    container_name: data-generation-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_PROVIDER=${MODEL_PROVIDER}
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always 
+
+volumes:
+  postgres_data: 

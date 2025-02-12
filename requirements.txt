@@ -1,0 +1,17 @@
+fastapi
+httpx
+uvicorn
+transformers
+torch
+huggingface_hub
+python-dotenv
+openai
+sqlalchemy
+databases
+psycopg2
+python-jose[cryptography]
+passlib
+asyncpg
+bcrypt
+python-multipart
+alembic
