@@ -1,15 +1,14 @@
 # routers/generate.py
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
 from crud.generated_text import create_generated_text, get_generated_texts
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
+from fastapi import APIRouter, Depends, HTTPException
 from models.auth import User
 from models.model import TextGenerationModel
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 model_instance = TextGenerationModel()
@@ -54,7 +53,7 @@ async def generate_text(
             )
             saved_texts.append(saved_text)
 
-        return [t.text for t in saved_texts]
+        return {"generated_texts": [t.text for t in saved_texts]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
