@@ -1,3 +1,4 @@
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -25,3 +26,19 @@ KEY_WORDS_TEXT = """Ты должен сгенерировать текст по
 
 EXAMPLE_TEXT = """Ты должен сгенерировать текст, похожий на следующий пример: {example_text}.
 Текст должен содержать не более {max_length} {max_length_type}."""
+
+
+def get_logger(level=logging.INFO, logger_name="default logger") -> logging.Logger:
+    logging.basicConfig(level=level)
+
+    handler = logging.FileHandler("myapp.log")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(logger_name)
+    logger.addHandler(handler)
+    logger.setLevel(level)
+
+    return logger

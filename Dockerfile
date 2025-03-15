@@ -24,11 +24,6 @@ RUN mkdir -p /app/models/cache
 
 ARG MODEL_PROVIDER
 ARG HUGGINGFACE_TOKEN
-RUN if [ "$MODEL_PROVIDER" = "mistral" ]; then \
-    python -c "from huggingface_hub import snapshot_download; \
-    import os; \
-    snapshot_download(repo_id='mistralai/Mistral-7B-v0.1', cache_dir='/app/models/cache', use_auth_token=os.getenv('HUGGINGFACE_TOKEN'), resume_download=True, local_dir_use_symlinks=False)"; \
-    fi
 
 EXPOSE 8000
 

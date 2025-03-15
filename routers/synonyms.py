@@ -1,15 +1,15 @@
 # routers/synonyms.py
 import asyncio
-import logging
 from typing import List
 
 import httpx
 from dependencies.auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from settings import YANDEX_API_KEY
+from settings import YANDEX_API_KEY, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(logger_name=__name__)
+
 router = APIRouter()
 
 

@@ -1,6 +1,6 @@
 # models/model.py
 import asyncio
-import logging
+
 import os
 import re
 from pathlib import Path
@@ -10,8 +10,6 @@ import openai
 import torch
 from huggingface_hub import snapshot_download
 from openai import AsyncOpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from settings import (
     EXAMPLE_TEXT,
     HUGGINGFACE_TOKEN,
@@ -19,9 +17,11 @@ from settings import (
     MODEL_PROVIDER,
     OPENAI_API_KEY,
     THEME_TEXT,
+    get_logger
 )
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(logger_name=__name__)
 
 
 class TextGenerationModel:
@@ -51,7 +51,7 @@ class TextGenerationModel:
         os.makedirs(self.cache_dir, exist_ok=True)
 
         # Проверяем наличие модели
-        model_path = Path(self.cache_dir) / self.model_name.replace("/", "_")
+        model_path = Path(self.cache_dir) /( "models--" + self.model_name.replace("/", "--"))
         if not model_path.exists():
             logger.info("Модель не найдена локально. Начинается загрузка...")
             self.download_model()
@@ -71,12 +71,12 @@ class TextGenerationModel:
 
         # Загрузка токенизатора и модели из локального кэша с использованием токена
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name, cache_dir=self.cache_dir, use_auth_token=self.hf_token
+            self.model_name, cache_dir=self.cache_dir, token=self.hf_token
         )
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             cache_dir=self.cache_dir,
-            use_auth_token=self.hf_token,
+            token=self.hf_token,
             torch_dtype=torch.float16 if self.device.type != "mps" else torch.float32,
             device_map=None,
         ).to(self.device)
@@ -134,36 +134,80 @@ class TextGenerationModel:
                 example_text,
             )
 
-    # async def _generate_with_mistral(
-    #     self, additional_parameters, num_samples, max_length
-    # ):
-    #     # Оборачиваем синхронный код в asyncio.to_thread
-    #     return await asyncio.to_thread(
-    #         self._generate_with_mistral_sync,
-    #         additional_parameters,
-    #         num_samples,
-    #         max_length,
-    #     )
+    async def _generate_with_mistral(
+        self,
+        num_samples: int = 1,
+        max_length: Optional[int] = None,
+        max_length_type: Optional[str] = None,
+        theme: Optional[str] = None,
+        key_words: Optional[List[str]] = None,
+        example_text: Optional[str] = None,
+    ) -> List[str]:
+        tasks = []
+        for _ in range(num_samples):
+            tasks.append(
+                asyncio.to_thread(
+                    self._generate_with_mistral_sync,
+                    max_length,
+                    max_length_type,
+                    theme,
+                    key_words,
+                    example_text,
+                )
+            )
+        generated_texts = await asyncio.gather(*tasks)
+        return generated_texts
 
-    # def _generate_with_mistral_sync(
-    #     self, additional_parameters, num_samples, max_length
-    # ):
-    #     if additional_parameters:
-    #         request_text = f""""{COMMON_TEXT}\nТакже, вот параметры генерации, которые пользователь передал в своем запросе, используй эти пожелания для составления текста: {'\n'.join([f'{param["key"]}: {param["content"]}' for param in additional_parameters])}"""
-    #     else:
-    #         request_text = COMMON_TEXT
-    #     inputs = self.tokenizer(request_text, return_tensors="pt").to(self.device)
-    #     outputs = self.model.generate(
-    #         **inputs,
-    #         max_length=max_length,
-    #         num_return_sequences=num_samples,
-    #         do_sample=True,
-    #         temperature=0.7,
-    #     )
-    #     return [
-    #         self.tokenizer.decode(output, skip_special_tokens=True)
-    #         for output in outputs
-    #     ]
+    def _generate_with_mistral_sync(
+        self,
+        max_length: Optional[int],
+        max_length_type: Optional[str],
+        theme: Optional[str],
+        key_words: Optional[List[str]],
+        example_text: Optional[str],
+    ) -> str:
+        # Формируем промпт
+        if theme:
+            request_text = THEME_TEXT.format(
+                theme=theme, max_length=max_length, max_length_type=max_length_type
+            )
+        elif key_words:
+            key_words_str = ", ".join(key_words)
+            request_text = KEY_WORDS_TEXT.format(
+                key_words=key_words_str,
+                max_length=max_length,
+                max_length_type=max_length_type,
+            )
+        elif example_text:
+            request_text = EXAMPLE_TEXT.format(
+                example_text=example_text,
+                max_length=max_length,
+                max_length_type=max_length_type,
+            )
+        else:
+            request_text = (
+                "Сгенерируйте текст по заданной теме с указанными ограничениями."
+            )
+
+        # Определяем max_tokens
+        max_tokens = self._determine_max_tokens(max_length, max_length_type)
+
+        inputs = self.tokenizer(request_text, return_tensors="pt").to(self.device)
+        outputs = self.model.generate(
+            **inputs,
+            max_length=max_tokens,
+            num_return_sequences=1,
+            do_sample=True,
+            temperature=0.7,
+        )
+        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Строгий контроль длины текста
+        generated_text = self._enforce_length_constraints(
+            generated_text, max_length, max_length_type
+        )
+
+        return generated_text
 
     async def _generate_with_openai(
         self,
