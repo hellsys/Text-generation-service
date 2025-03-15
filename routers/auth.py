@@ -1,11 +1,6 @@
 # routers/auth.py
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
 from auth import create_access_token
 from crud.user import (
     authenticate_user,
@@ -13,8 +8,14 @@ from crud.user import (
     get_user_by_email,
     get_user_by_username,
 )
+from dependencies.auth import get_current_user
 from dependencies.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from models.user import User
+from pydantic import BaseModel
 from settings import ACCESS_TOKEN_EXPIRE_MINUTES
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -23,6 +24,9 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
+    age: int
+    country: str
+    fullname: str
 
 
 @router.post("/register", status_code=201)
@@ -31,7 +35,15 @@ def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
         db, request.email
     ):
         raise HTTPException(status_code=400, detail="Username or email already exists")
-    user = create_user(db, request.username, request.email, request.password)
+    user = create_user(
+        db,
+        username=request.username,
+        email=request.email,
+        password=request.password,
+        age=request.age,
+        country=request.country,
+        fullname=request.fullname,
+    )
     return {"message": f"User {user.username} created successfully"}
 
 
@@ -51,3 +63,8 @@ def login_for_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/user")
+def get_user_data(current_user: User = Depends(get_current_user)):
+    return current_user.to_dict()

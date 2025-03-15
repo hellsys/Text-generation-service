@@ -1,8 +1,7 @@
 # crud/user.py
+from models.user import User
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-
-from models.user import User
 
 # Настройка контекста хэширования паролей
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -28,7 +27,15 @@ def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
 
 
-def create_user(db: Session, username: str, email: str, password: str):
+def create_user(
+    db: Session,
+    username: str,
+    email: str,
+    password: str,
+    age: int,
+    country: str,
+    fullname: str,
+):
     """
     Создаёт нового пользователя в базе данных.
     :param db: Сессия базы данных
@@ -38,7 +45,14 @@ def create_user(db: Session, username: str, email: str, password: str):
     :return: Объект созданного пользователя (User)
     """
     hashed_password = pwd_context.hash(password)
-    user = User(username=username, email=email, hashed_password=hashed_password)
+    user = User(
+        username=username,
+        email=email,
+        hashed_password=hashed_password,
+        age=age,
+        country=country,
+        fullname=fullname,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

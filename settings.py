@@ -21,7 +21,7 @@ DATABASE_URL = os.getenv(
 THEME_TEXT = """Ты должен сгенерировать текст по следующей теме: {theme}.
 Текст должен содержать не более {max_length} {max_length_type}."""
 
-KEY_WORDS_TEXT = """Ты должен сгенерировать текст по следующим ключевым словам: {key_words}.
+KEY_WORDS_TEXT = """Ты должен сгенерировать текст по следующим ключевым словам: {key_words}. При использовании слова обязательно подбирай правильную форму, не обязательно использовать его в той же форме, в которой оно представлено.
 Текст должен содержать не более {max_length} {max_length_type}."""
 
 EXAMPLE_TEXT = """Ты должен сгенерировать текст, похожий на следующий пример: {example_text}.
@@ -31,14 +31,23 @@ EXAMPLE_TEXT = """Ты должен сгенерировать текст, по�
 def get_logger(level=logging.INFO, logger_name="default logger") -> logging.Logger:
     logging.basicConfig(level=level)
 
-    handler = logging.FileHandler("myapp.log")
-    formatter = logging.Formatter(
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(level)
+
+    # Файл для логирования
+    file_handler = logging.FileHandler("myapp.log")
+    file_formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    handler.setFormatter(formatter)
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
 
-    logger = logging.getLogger(logger_name)
-    logger.addHandler(handler)
-    logger.setLevel(level)
+    # Вывод в консоль
+    console_handler = logging.StreamHandler()
+    console_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
 
     return logger

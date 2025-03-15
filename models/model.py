@@ -1,6 +1,6 @@
 # models/model.py
 import asyncio
-
+import itertools
 import os
 import re
 from pathlib import Path
@@ -17,7 +17,7 @@ from settings import (
     MODEL_PROVIDER,
     OPENAI_API_KEY,
     THEME_TEXT,
-    get_logger
+    get_logger,
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -51,7 +51,9 @@ class TextGenerationModel:
         os.makedirs(self.cache_dir, exist_ok=True)
 
         # Проверяем наличие модели
-        model_path = Path(self.cache_dir) /( "models--" + self.model_name.replace("/", "--"))
+        model_path = Path(self.cache_dir) / (
+            "models--" + self.model_name.replace("/", "--")
+        )
         if not model_path.exists():
             logger.info("Модель не найдена локально. Начинается загрузка...")
             self.download_model()
@@ -114,6 +116,7 @@ class TextGenerationModel:
         theme,
         key_words,
         example_text,
+        temperature,
     ):
         if self.model_provider == "mistral":
             return await self._generate_with_mistral(
@@ -123,6 +126,7 @@ class TextGenerationModel:
                 theme,
                 key_words,
                 example_text,
+                temperature,
             )
         elif self.model_provider == "openai":
             return await self._generate_with_openai(
@@ -132,6 +136,7 @@ class TextGenerationModel:
                 theme,
                 key_words,
                 example_text,
+                temperature,
             )
 
     async def _generate_with_mistral(
@@ -142,6 +147,7 @@ class TextGenerationModel:
         theme: Optional[str] = None,
         key_words: Optional[List[str]] = None,
         example_text: Optional[str] = None,
+        temperature: Optional[float] = 1,
     ) -> List[str]:
         tasks = []
         for _ in range(num_samples):
@@ -153,6 +159,7 @@ class TextGenerationModel:
                     theme,
                     key_words,
                     example_text,
+                    temperature,
                 )
             )
         generated_texts = await asyncio.gather(*tasks)
@@ -165,6 +172,7 @@ class TextGenerationModel:
         theme: Optional[str],
         key_words: Optional[List[str]],
         example_text: Optional[str],
+        temperature: Optional[float],
     ) -> str:
         # Формируем промпт
         if theme:
@@ -198,7 +206,7 @@ class TextGenerationModel:
             max_length=max_tokens,
             num_return_sequences=1,
             do_sample=True,
-            temperature=0.7,
+            temperature=temperature,
         )
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
@@ -215,18 +223,32 @@ class TextGenerationModel:
         max_length: Optional[int] = None,
         max_length_type: Optional[str] = None,
         theme: Optional[str] = None,
-        key_words: Optional[List[str]] = None,
+        key_words: Optional[List[List[str]]] = None,  # список групп синонимов
         example_text: Optional[str] = None,
+        temperature: Optional[float] = 1,
     ) -> List[str]:
         tasks = []
-        for _ in range(num_samples):
+
+        if key_words:
+            all_combinations = list(itertools.product(*key_words))
+        else:
+            all_combinations = None
+
+        for i in range(num_samples):
+            if all_combinations:
+                combination = all_combinations[i % len(all_combinations)]
+                selected_keywords_str = ", ".join(combination)
+            else:
+                selected_keywords_str = None
+
             tasks.append(
                 self._call_openai_api(
                     max_length,
                     max_length_type,
                     theme,
-                    key_words,
-                    example_text,
+                    key_words=selected_keywords_str,
+                    example_text=example_text,
+                    temperature=temperature,
                 )
             )
         generated_texts = await asyncio.gather(*tasks)
@@ -237,8 +259,9 @@ class TextGenerationModel:
         max_length: Optional[int],
         max_length_type: Optional[str],
         theme: Optional[str],
-        key_words: Optional[List[str]],
+        key_words: Optional[str],
         example_text: Optional[str],
+        temperature: Optional[float],
     ) -> str:
         # Формируем промпт на основе переданных параметров
         if theme:
@@ -246,9 +269,8 @@ class TextGenerationModel:
                 theme=theme, max_length=max_length, max_length_type=max_length_type
             )
         elif key_words:
-            key_words_str = ", ".join(key_words)
             request_text = KEY_WORDS_TEXT.format(
-                key_words=key_words_str,
+                key_words=key_words,
                 max_length=max_length,
                 max_length_type=max_length_type,
             )
@@ -269,16 +291,11 @@ class TextGenerationModel:
         try:
             response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": request_text,
-                    }
-                ],
+                messages=[{"role": "system", "content": request_text}],
                 n=1,
                 stop=None,
                 max_tokens=max_tokens,
-                temperature=0.7,
+                temperature=temperature,
             )
             generated_text = response.choices[0].message.content
 
